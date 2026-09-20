@@ -3,9 +3,10 @@ set -e
 
 cd /app
 
-PORT="${PORT:-8000}"
+PORT="${PORT:-8080}"
 
 echo "[entrypoint] Working directory: $(pwd)"
+echo "[entrypoint] Target PORT: $PORT"
 echo "[entrypoint] Cleaning any stale X11 locks..."
 rm -f /tmp/.X99-lock /tmp/.X11-unix/X99 2>/dev/null || true
 

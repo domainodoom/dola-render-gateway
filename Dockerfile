@@ -3,7 +3,8 @@ FROM python:3.11-slim
 WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1 \
-    DEBIAN_FRONTEND=noninteractive
+    DEBIAN_FRONTEND=noninteractive \
+    PORT=8080
 
 # Install tini, xvfb, xauth, ffmpeg, fonts, curl, ca-certificates, and all Chromium dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -50,6 +51,8 @@ COPY . .
 # Ensure storage directories exist and entrypoint is executable
 RUN mkdir -p /data/accounts /data/downloads accounts downloads && \
     chmod +x entrypoint.sh
+
+EXPOSE 8080
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["/app/entrypoint.sh"]

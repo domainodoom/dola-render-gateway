@@ -18,7 +18,7 @@ def _load_local_env():
 
 _load_local_env()
 HOST = os.getenv("DOLA_HOST", "0.0.0.0")
-PORT = int(os.getenv("PORT") or os.getenv("DOLA_PORT") or "8000")
+PORT = int(os.getenv("PORT") or os.getenv("DOLA_PORT") or "8080")
 
 # Service API keys (comma-separated; empty = no auth, local debug only)
 API_KEYS = [k.strip() for k in os.getenv("DOLA_API_KEYS", "").split(",") if k.strip()]
