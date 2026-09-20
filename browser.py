@@ -1,4 +1,5 @@
-"""Patchright persistent context launcher: Explicit proxy and anti-detection parameters."""
+import os
+import sys
 from pathlib import Path
 
 import config
@@ -33,8 +34,14 @@ async def launch_account_context(p, account: str, headless: bool = None, use_ext
         extension_dir = Path(config.EXTENSION_DIR).resolve()
         if not extension_dir.exists():
             raise FileNotFoundError(f"Dola extension directory does not exist: {extension_dir}")
-        # Chromium debugger extension requires headed window to intercept skill/action-bar responses
-        launch_headless = False
+        # Chromium debugger extension: On headless Linux server without display, keep headless and use --headless=new
+        if sys.platform != "win32" and not os.getenv("DISPLAY"):
+            launch_headless = True
+            if "--headless=new" not in args:
+                args.append("--headless=new")
+        else:
+            launch_headless = False
+
         args.extend([
             f"--disable-extensions-except={extension_dir}",
             f"--load-extension={extension_dir}",

@@ -323,7 +323,7 @@ async def resume_video(account: str, conversation_id: str, timeout: int,
                        on_poll=None, on_balance=None) -> dict:
     """Recovers accepted session after server restart without re-sending prompt."""
     async with async_playwright() as p:
-        context = await launch_account_context(p, account, headless=False, use_extension=True)
+        context = await launch_account_context(p, account, headless=False if sys.platform == "win32" else None, use_extension=True)
         try:
             page = context.pages[0] if context.pages else await context.new_page()
             await page.goto(f"https://www.dola.com/chat/{conversation_id}",
@@ -359,7 +359,7 @@ async def generate_video(account: str, prompt: str, ratio: str = None,
         timeout = max(timeout, config.REFERENCE_VIDEO_TIMEOUT)
     async with async_playwright() as p:
         context = await launch_account_context(
-            p, account, headless=False if use_extension else None,
+            p, account, headless=False if use_extension and sys.platform == "win32" else None,
             use_extension=use_extension)
         try:
             page = context.pages[0] if context.pages else await context.new_page()

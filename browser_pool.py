@@ -345,10 +345,18 @@ class BrowserPool:
                         def on_balance(balance, source=""):
                             self._set_credit_balance(account, balance, source)
 
-                        result = await generate_video(
-                            account, prompt, ratio, duration, model=model,
-                            on_conversation_id=on_conversation_id, on_poll=on_poll,
-                            on_balance=on_balance, reference_image_paths=reference_image_paths)
+                        try:
+                            result = await generate_video(
+                                account, prompt, ratio, duration, model=model,
+                                on_conversation_id=on_conversation_id, on_poll=on_poll,
+                                on_balance=on_balance, reference_image_paths=reference_image_paths)
+                        except (CreditInsufficientError, AccountLimitedError, CreditError, RiskControlError, TimeoutError, FileNotFoundError):
+                            raise
+                        except Exception as ui_err:
+                            print(f"[pool] {account} UI mode error ({ui_err}), falling back to protocol worker...", flush=True)
+                            import video_worker
+                            result = await video_worker.generate_video(
+                                account, prompt, ratio=ratio or "16:9", duration=duration or 10)
                         self._claim(account)
                         self._conn.execute(
                             "UPDATE accounts_meta SET last_used_at=? WHERE name=?",
