@@ -2,3 +2,4 @@
 *.sh text eol=lf
 Dockerfile text eol=lf
 railway.toml text eol=lf
+nixpacks.toml text eol=lf
