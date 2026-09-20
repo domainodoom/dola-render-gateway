@@ -52,4 +52,4 @@ COPY . .
 RUN mkdir -p /data/accounts /data/downloads accounts downloads
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["sh", "-c", "xvfb-run -a -s '-screen 0 1280x720x24' uvicorn server:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
+CMD ["xvfb-run", "-a", "--server-args=-screen 0 1280x720x24", "python", "server.py"]

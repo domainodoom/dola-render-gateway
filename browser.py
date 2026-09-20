@@ -16,6 +16,10 @@ LAUNCH_ARGS = [
 ]
 
 
+class BrowserLaunchError(Exception):
+    """Chromium persistent context failed to launch or closed immediately."""
+
+
 def clean_profile_locks(profile_dir: Path):
     """Safely cleans stale Chromium locks when browser previously crashed."""
     for lock_name in ("SingletonLock", "SingletonSocket", "SingletonCookie"):
@@ -83,7 +87,9 @@ async def launch_account_context(p, account: str, headless: bool = None, use_ext
                 print("[browser] Waiting 3 seconds before retry...", flush=True)
                 await asyncio.sleep(3)
 
-    raise last_exc
+    raise BrowserLaunchError(
+        f"Failed to launch Chromium context for '{account}' after {max_attempts} attempts: {last_exc}"
+    ) from last_exc
 
 
 def cookie_value(cookies: list, name: str) -> str:

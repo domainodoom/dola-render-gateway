@@ -1797,12 +1797,13 @@ async function loadAccounts() {
     const res = await api('/api/admin/accounts');
     const list = Array.isArray(res) ? res : (res && res.accounts ? res.accounts : []);
     const rows = list.map(a => {
-      let stateBadge = '<span class="badge b-green">Hoạt động</span>';
+      let stateBadge = '<span class="badge b-green">Hoạt động (Active)</span>';
       if (a.busy) stateBadge = '<span class="badge b-amber">Đang render</span>';
-      else if (a.cooling) stateBadge = '<span class="badge b-amber">Chờ mở rate limit</span>';
-      else if (a.quota_blocked) stateBadge = '<span class="badge b-red">Hết Quota</span>';
+      else if (a.status === 'cooldown_daily' || a.quota_blocked) stateBadge = '<span class="badge b-amber" title="' + esc(a.reason || 'Cooldown reset harian') + '">Cooldown harian</span>';
+      else if (a.status === 'cooldown_risk' || a.cooling) stateBadge = '<span class="badge b-amber" title="' + esc(a.reason || 'Risk control') + '">Risk cooldown</span>';
+      else if (a.status === 'session_expired' || a.login_ok === false) stateBadge = '<span class="badge b-red" title="Cần đăng nhập lại">Hết hạn phiên</span>';
+      else if (a.status === 'disabled_manual' || !a.scheduling) stateBadge = '<span class="badge">Đã tắt</span>';
       else if (a.rate_limited || (a.used_today >= a.limit)) stateBadge = '<span class="badge b-amber">Đạt hạn mức</span>';
-      else if (!a.scheduling) stateBadge = '<span class="badge">Đã tắt</span>';
 
       const schedToggle = `
         <label class="switch-toggle" title="${a.scheduling ? 'Đang bật điều phối' : 'Đang tắt điều phối'}">
