@@ -1,9 +1,14 @@
-FROM mcr.microsoft.com/playwright/python:v1.48.0-noble
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install xvfb and xauth for virtual display
+ENV PYTHONUNBUFFERED=1 \
+    DEBIAN_FRONTEND=noninteractive
+
+# Install ca-certificates, curl, and Xvfb virtual display
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
     xvfb \
     xauth \
     && rm -rf /var/lib/apt/lists/*
@@ -13,8 +18,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Install chromium for patchright
-RUN patchright install chromium
+# Install Chromium and all OS system dependencies automatically
+RUN patchright install --with-deps chromium
 
 COPY . .
 
