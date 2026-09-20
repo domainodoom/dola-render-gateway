@@ -41,6 +41,7 @@ from add_account import add_account_flow
 from browser_pool import AllAccountsLimitedError, AllAccountsQuotaBlockedError, BrowserPool
 from media import download_reference_images, validate_reference_urls
 from store import PendingTaskLimitExceeded, TaskQuotaExceeded, TaskStore
+from supabase_client import supabase_mgr
 
 Path(config.DOWNLOAD_DIR).mkdir(parents=True, exist_ok=True)
 Path(config.ACCOUNTS_DIR).mkdir(parents=True, exist_ok=True)
@@ -210,6 +211,8 @@ async def _run_task(task_id, model, prompt, ratio, duration, reference_images, c
             store.update(task_id, status="processing", account=account,
                          conversation_id=conversation_id, deadline_at=deadline_at,
                          last_poll_at=time.time())
+            if supabase_mgr.is_configured:
+                asyncio.create_task(supabase_mgr.sync_task(store.get(task_id)))
 
         def on_poll(now):
             store.update(task_id, last_poll_at=now)
@@ -220,17 +223,27 @@ async def _run_task(task_id, model, prompt, ratio, duration, reference_images, c
             prompt, ratio, duration, model,
             on_conversation_id=on_conversation_id, on_poll=on_poll,
             reference_image_paths=reference_paths)
-        public_url = f"{config.PUBLIC_BASE}/videos/{Path(result['local_path']).name}"
+        local_path = result.get('local_path')
+        supabase_url = None
+        if local_path and supabase_mgr.is_configured:
+            supabase_url = await supabase_mgr.upload_video(local_path, task_id, expires_in=86400)
+        public_url = supabase_url or f"{config.PUBLIC_BASE}/videos/{Path(local_path).name if local_path else ''}"
         store.update(task_id, status="completed", video_url=public_url,
                      account=result.get("account"), last_poll_at=time.time(),
                      finished_at=time.time())
+        if supabase_mgr.is_configured:
+            asyncio.create_task(supabase_mgr.sync_task(store.get(task_id)))
     except (AllAccountsLimitedError, AllAccountsQuotaBlockedError) as e:
         store.update(task_id, status="failed", error=str(e)[:500],
                      failure_code="429", finished_at=time.time())
+        if supabase_mgr.is_configured:
+            asyncio.create_task(supabase_mgr.sync_task(store.get(task_id)))
     except Exception as e:
         err_msg = str(e).strip() or repr(e)
         store.update(task_id, status="failed", error=err_msg[:500],
                      finished_at=time.time())
+        if supabase_mgr.is_configured:
+            asyncio.create_task(supabase_mgr.sync_task(store.get(task_id)))
     finally:
         if reference_root:
             shutil.rmtree(reference_root, ignore_errors=True)
@@ -259,10 +272,16 @@ async def _resume_task(row: dict):
 
         result = await pool.resume_video(
             row["account"], row["conversation_id"], remaining, on_poll=on_poll)
-        public_url = f"{config.PUBLIC_BASE}/videos/{Path(result['local_path']).name}"
+        local_path = result.get('local_path')
+        supabase_url = None
+        if local_path and supabase_mgr.is_configured:
+            supabase_url = await supabase_mgr.upload_video(local_path, task_id, expires_in=86400)
+        public_url = supabase_url or f"{config.PUBLIC_BASE}/videos/{Path(local_path).name if local_path else ''}"
         store.update(task_id, status="completed", video_url=public_url,
                      account=result.get("account"), last_poll_at=time.time(),
                      finished_at=time.time())
+        if supabase_mgr.is_configured:
+            asyncio.create_task(supabase_mgr.sync_task(store.get(task_id)))
     except Exception as e:
         store.update(task_id, status="failed", error=str(e)[:500],
                      finished_at=time.time())
