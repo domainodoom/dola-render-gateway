@@ -1,0 +1,6 @@
+[build]
+builder = "DOCKERFILE"
+
+[deploy]
+startCommand = "xvfb-run -a -s '-screen 0 1280x720x24' python -m uvicorn server:app --host 0.0.0.0 --port $PORT --workers 1"
+restartPolicyType = "ON_FAILURE"
