@@ -49,10 +49,10 @@ DOWNLOAD_DIR = os.getenv("DOLA_DOWNLOAD_DIR", "downloads")
 PROXY = os.getenv("DOLA_PROXY", "").strip()
 
 # Run browser in headless mode (login always runs with head)
-HEADLESS = os.getenv("DOLA_HEADLESS", "1") == "1"
+HEADLESS = os.getenv("DOLA_HEADLESS", "0") == "1"
 
 # Base public URL for returning static video links
-PUBLIC_BASE = os.getenv("DOLA_PUBLIC_BASE", f"http://127.0.0.1:{PORT}")
+PUBLIC_BASE = os.getenv("DOLA_PUBLIC_BASE", "https://dola-render-gateway-production.up.railway.app")
 
 # Admin web dashboard password (empty = no auth)
 ADMIN_KEY = os.getenv("DOLA_ADMIN_KEY", "")
