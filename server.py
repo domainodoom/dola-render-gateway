@@ -315,7 +315,7 @@ async def _auto_import_cookies_on_startup():
 @app.on_event("startup")
 async def resume_incomplete_tasks():
     """Recovers accepted sessions on startup and requeues pending tasks."""
-    await _auto_import_cookies_on_startup()
+    asyncio.create_task(_auto_import_cookies_on_startup())
     for row in store.recoverable_tasks():
         asyncio.create_task(_resume_task(row))
     for row in store.recoverable_queued_tasks():
