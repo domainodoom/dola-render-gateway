@@ -12,5 +12,8 @@ RUN patchright install chromium
 
 COPY . .
 
-# Railway routes traffic correctly when EXPOSE is omitted, but startCommand in railway.toml will use $PORT
+# Tell Railway to proxy traffic to port 8000
+EXPOSE 8000
+
+# Run uvicorn on port 8000
 CMD ["python", "-m", "uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
