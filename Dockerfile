@@ -15,5 +15,5 @@ COPY . .
 # Tell Railway to proxy traffic to port 8000
 EXPOSE 8000
 
-# Run uvicorn on port 8000
-CMD ["python", "-m", "uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run uvicorn on dynamic Railway PORT (or 8000 fallback)
+CMD python -m uvicorn server:app --host 0.0.0.0 --port ${PORT:-8000}
