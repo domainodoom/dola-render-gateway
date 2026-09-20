@@ -1,8 +1,11 @@
 #!/bin/sh
 set -e
 
+cd /app
+
 PORT="${PORT:-8000}"
 
+echo "[entrypoint] Working directory: $(pwd)"
 echo "[entrypoint] Cleaning any stale X11 locks..."
 rm -f /tmp/.X99-lock /tmp/.X11-unix/X99 2>/dev/null || true
 
@@ -12,4 +15,4 @@ sleep 1
 export DISPLAY=:99
 
 echo "[entrypoint] Virtual display active (DISPLAY=$DISPLAY). Starting Uvicorn on port $PORT..."
-exec uvicorn server:app --host 0.0.0.0 --port "$PORT" --workers 1
+exec python -m uvicorn server:app --host 0.0.0.0 --port "$PORT" --workers 1
