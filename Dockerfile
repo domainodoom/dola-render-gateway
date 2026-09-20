@@ -3,8 +3,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1 \
-    DEBIAN_FRONTEND=noninteractive \
-    PORT=8000
+    DEBIAN_FRONTEND=noninteractive
 
 # Install tini, xvfb, xauth, ffmpeg, fonts, curl, ca-certificates, and all Chromium dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -48,8 +47,9 @@ RUN patchright install chromium
 
 COPY . .
 
-# Ensure storage directories exist
-RUN mkdir -p /data/accounts /data/downloads accounts downloads
+# Ensure storage directories exist and entrypoint is executable
+RUN mkdir -p /data/accounts /data/downloads accounts downloads && \
+    chmod +x entrypoint.sh
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["xvfb-run", "-a", "--server-args=-screen 0 1280x720x24", "python", "server.py"]
+CMD ["/app/entrypoint.sh"]
