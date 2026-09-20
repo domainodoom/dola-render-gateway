@@ -286,9 +286,32 @@ def _task_reference_images(raw) -> list[str]:
     return values if isinstance(values, list) else []
 
 
+async def _auto_import_cookies_on_startup():
+    cookie_file = Path(config.COOKIES_FILE)
+    if not cookie_file.exists():
+        return
+    try:
+        lines = [line.strip() for line in cookie_file.read_text(encoding="utf-8").splitlines() if line.strip() and not line.startswith("#")]
+        if not lines:
+            return
+        from import_cookie import import_account_from_data
+        existing = set(pool.accounts)
+        for idx, line in enumerate(lines, 1):
+            acc_name = f"acc{idx}"
+            if acc_name not in existing:
+                try:
+                    await import_account_from_data(acc_name, line)
+                    print(f"[startup] auto-imported {acc_name}", flush=True)
+                except Exception as e:
+                    print(f"[startup] failed to auto-import {acc_name}: {e}", flush=True)
+    except Exception as exc:
+        print(f"[startup] auto_import error: {exc}", flush=True)
+
+
 @app.on_event("startup")
 async def resume_incomplete_tasks():
     """Recovers accepted sessions on startup and requeues pending tasks."""
+    await _auto_import_cookies_on_startup()
     for row in store.recoverable_tasks():
         asyncio.create_task(_resume_task(row))
     for row in store.recoverable_queued_tasks():

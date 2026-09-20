@@ -4,6 +4,10 @@ from pathlib import Path
 import config
 
 LAUNCH_ARGS = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
     "--disable-blink-features=AutomationControlled",
     "--no-first-run",
     "--no-default-browser-check",
