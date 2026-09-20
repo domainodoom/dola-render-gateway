@@ -8,6 +8,7 @@ GET  /videos/<file>          -> Static video download server
 Admin Dashboard: GET / -> web/index.html; Admin API /api/admin/*
 """
 import asyncio
+import os
 import sys
 if sys.platform == "win32":
     try:
