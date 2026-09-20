@@ -1174,61 +1174,36 @@ async def serve_index():
 
 @app.get("/api/debug/browser")
 async def debug_browser():
-    import shutil, subprocess
-    from patchright.async_api import async_playwright
-    from browser import LAUNCH_ARGS
-    
-    info = {
-        "platform": sys.platform,
-        "display": os.getenv("DISPLAY"),
-        "xvfb_which": shutil.which("Xvfb"),
-        "xauth_which": shutil.which("xauth"),
-        "accounts_dir": str(config.ACCOUNTS_DIR),
-        "accounts_exist": Path(config.ACCOUNTS_DIR).exists(),
-        "accounts_list": [p.name for p in Path(config.ACCOUNTS_DIR).iterdir()] if Path(config.ACCOUNTS_DIR).exists() else [],
-    }
-    
-    # Try launching playwright headless: True without extension
+    import traceback
     try:
-        async with async_playwright() as p:
-            b = await p.chromium.launch(headless=True, args=LAUNCH_ARGS)
-            page = await b.new_page()
-            await page.goto("https://www.google.com", timeout=15000)
-            title = await page.title()
-            await b.close()
-            info["chromium_pure_headless"] = f"OK: {title}"
-    except Exception as e:
-        info["chromium_pure_headless"] = f"ERROR: {type(e).__name__}: {e}"
-
-    # If Xvfb is available and DISPLAY is not set, try starting Xvfb
-    if not os.getenv("DISPLAY") and info["xvfb_which"]:
+        import shutil, subprocess
+        from patchright.async_api import async_playwright
+        from browser import LAUNCH_ARGS
+        
+        info = {
+            "platform": sys.platform,
+            "display": os.getenv("DISPLAY"),
+            "xvfb_which": shutil.which("Xvfb"),
+            "xauth_which": shutil.which("xauth"),
+            "accounts_dir": str(config.ACCOUNTS_DIR),
+            "accounts_exist": Path(config.ACCOUNTS_DIR).exists(),
+            "accounts_list": [p.name for p in Path(config.ACCOUNTS_DIR).iterdir()] if Path(config.ACCOUNTS_DIR).exists() else [],
+        }
+        
         try:
-            subprocess.Popen(
-                [info["xvfb_which"], ":99", "-screen", "0", "1280x720x24", "-ac", "+extension", "GLX", "+render", "-noreset"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-            )
-            os.environ["DISPLAY"] = ":99"
-            info["xvfb_started"] = True
-            info["new_display"] = ":99"
+            async with async_playwright() as p:
+                b = await p.chromium.launch(headless=True, args=LAUNCH_ARGS)
+                page = await b.new_page()
+                await page.goto("https://www.google.com", timeout=15000)
+                title = await page.title()
+                await b.close()
+                info["chromium_pure_headless"] = f"OK: {title}"
         except Exception as e:
-            info["xvfb_start_err"] = str(e)
+            info["chromium_pure_headless"] = f"ERROR: {type(e).__name__}: {e}"
 
-    # Try launching with extension
-    try:
-        async with async_playwright() as p:
-            ext_dir = Path(config.EXTENSION_DIR).resolve()
-            args = list(LAUNCH_ARGS) + [f"--disable-extensions-except={ext_dir}", f"--load-extension={ext_dir}"]
-            is_headless = not bool(os.getenv("DISPLAY"))
-            b = await p.chromium.launch(headless=is_headless, args=args)
-            page = await b.new_page()
-            await page.goto("https://www.google.com", timeout=15000)
-            title = await page.title()
-            await b.close()
-            info["chromium_with_ext"] = f"OK: {title}"
-    except Exception as e:
-        info["chromium_with_ext"] = f"ERROR: {type(e).__name__}: {e}"
-
-    return info
+        return info
+    except Exception:
+        return {"traceback": traceback.format_exc()}
 
 
 @app.get("/favicon.ico", include_in_schema=False)
