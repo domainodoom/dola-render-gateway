@@ -13,11 +13,13 @@ nixPkgs = [
     "libdrm",
     "alsa-lib",
     "pango",
-    "cairo"
+    "cairo",
+    "socat"
 ]
 aptPkgs = [
     "xvfb",
     "xauth",
+    "socat",
     "libgtk-3-0",
     "libdbus-1-3",
     "libnss3",
@@ -40,4 +42,4 @@ cmds = [
 ]
 
 [deploy]
-startCommand = "xvfb-run -a -s '-screen 0 1280x720x24' python -m uvicorn server:app --host 0.0.0.0 --port $PORT --workers 1"
+startCommand = "xvfb-run -a -s '-screen 0 1280x720x24' python -m uvicorn server:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"
