@@ -1,4 +1,20 @@
 [phases.setup]
+nixPkgs = [
+    "glib",
+    "xorg.xorgserver",
+    "xorg.xauth",
+    "xvfb-run",
+    "gtk3",
+    "nss",
+    "nspr",
+    "dbus",
+    "atk",
+    "cups",
+    "libdrm",
+    "alsa-lib",
+    "pango",
+    "cairo"
+]
 aptPkgs = [
     "xvfb",
     "xauth",
@@ -6,7 +22,9 @@ aptPkgs = [
     "libdbus-1-3",
     "libnss3",
     "libgbm1",
+    "libasound2t64",
     "libasound2",
+    "libglib2.0-0",
     "libx11-xcb1",
     "libxcomposite1",
     "libxdamage1",
@@ -23,4 +41,4 @@ cmds = [
 ]
 
 [deploy]
-startCommand = "xvfb-run -a -s '-screen 0 1280x720x24' uvicorn server:app --host 0.0.0.0 --port $PORT --workers 1"
+startCommand = "xvfb-run -a -s '-screen 0 1280x720x24' python -m uvicorn server:app --host 0.0.0.0 --port $PORT --workers 1"
