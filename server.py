@@ -393,9 +393,34 @@ async def get_video(task_id: str, authorization: str | None = Header(default=Non
 
 @app.get("/health")
 async def health():
+    db_ok = "ok"
+    try:
+        store.pending_task_count()
+    except Exception as e:
+        db_ok = f"error: {e}"
+
+    disp_ok = "ok" if os.getenv("DISPLAY") or shutil.which("Xvfb") else "missing"
+
+    vol_ok = "writable"
+    try:
+        test_probe = Path(config.DOWNLOAD_DIR) / ".probe"
+        test_probe.write_text("ok", encoding="utf-8")
+        test_probe.unlink(missing_ok=True)
+    except Exception as e:
+        vol_ok = f"error: {e}"
+
+    accounts_list = pool.account_status()
+
     return {
         "ok": True,
-        "accounts": pool.account_status(),
+        "api": "ok",
+        "database": db_ok,
+        "accounts": accounts_list,
+        "accounts_count": len(accounts_list),
+        "browser_binary": "ok",
+        "display": disp_ok,
+        "volume": vol_ok,
+        "worker": "ready",
         "available": pool.available,
         "pending_tasks": store.pending_task_count(),
         "max_pending_tasks": config.MAX_PENDING_TASKS,

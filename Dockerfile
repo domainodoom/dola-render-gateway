@@ -3,14 +3,19 @@ FROM python:3.11-slim
 WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1 \
-    DEBIAN_FRONTEND=noninteractive
+    DEBIAN_FRONTEND=noninteractive \
+    PORT=8000
 
-# Install xvfb, xauth, curl, ca-certificates, and all Chromium dependencies
+# Install tini, xvfb, xauth, ffmpeg, fonts, curl, ca-certificates, and all Chromium dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    tini \
     curl \
     ca-certificates \
     xvfb \
     xauth \
+    ffmpeg \
+    fonts-liberation \
+    fonts-noto-color-emoji \
     libglib2.0-0 \
     libnss3 \
     libnspr4 \
@@ -31,7 +36,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcairo2 \
     libasound2 \
     libatspi2.0-0 \
-    fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
 # Install python dependencies
@@ -44,4 +48,8 @@ RUN patchright install chromium
 
 COPY . .
 
-CMD ["xvfb-run", "-a", "-s", "-screen 0 1280x720x24", "python", "server.py"]
+# Ensure storage directories exist
+RUN mkdir -p /data/accounts /data/downloads accounts downloads
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["sh", "-c", "xvfb-run -a -s '-screen 0 1280x720x24' uvicorn server:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]

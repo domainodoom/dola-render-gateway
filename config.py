@@ -26,7 +26,7 @@ API_KEYS = [k.strip() for k in os.getenv("DOLA_API_KEYS", "").split(",") if k.st
 # Account pool cookie file (one dola.com cookie per line)
 COOKIES_FILE = os.getenv("DOLA_COOKIES_FILE", "cookies.txt")
 
-# Max concurrent video generation tasks
+# Max concurrent video generation tasks (default 1 for stability)
 MAX_CONCURRENCY = int(os.getenv("DOLA_MAX_CONCURRENCY", "1"))
 
 # Global pending task queue limit (queued + processing), 0 = unlimited
@@ -35,20 +35,25 @@ MAX_PENDING_TASKS = int(os.getenv("DOLA_MAX_PENDING_TASKS", "100"))
 # Video generation timeout in seconds
 VIDEO_TIMEOUT = int(os.getenv("DOLA_VIDEO_TIMEOUT", "300"))
 
+# Railway Volume / Persistent storage detection
+# If /data directory exists (Railway Volume mounted), use /data as default storage
+_HAS_VOLUME = Path("/data").is_dir()
+_BASE_DATA = Path("/data") if _HAS_VOLUME else Path(".")
+
 # SQLite database paths
-DB_PATH = os.getenv("DOLA_DB_PATH", "tasks.db")
-POOL_DB_PATH = os.getenv("DOLA_POOL_DB_PATH", "pool_usage.db")
+DB_PATH = os.getenv("DOLA_DB_PATH", str(_BASE_DATA / "tasks.db" if _HAS_VOLUME else "tasks.db"))
+POOL_DB_PATH = os.getenv("DOLA_POOL_DB_PATH", str(_BASE_DATA / "pool_usage.db" if _HAS_VOLUME else "pool_usage.db"))
 
 # Accounts profile directory
-ACCOUNTS_DIR = os.getenv("DOLA_ACCOUNTS_DIR", "accounts")
+ACCOUNTS_DIR = os.getenv("DOLA_ACCOUNTS_DIR", str(_BASE_DATA / "accounts" if _HAS_VOLUME else "accounts"))
 
 # Video download storage directory (served statically by FastAPI)
-DOWNLOAD_DIR = os.getenv("DOLA_DOWNLOAD_DIR", "downloads")
+DOWNLOAD_DIR = os.getenv("DOLA_DOWNLOAD_DIR", str(_BASE_DATA / "downloads" if _HAS_VOLUME else "downloads"))
 
 # Explicit browser proxy (must point to JP/KR egress; empty = system proxy / direct)
 PROXY = os.getenv("DOLA_PROXY", "").strip()
 
-# Run browser in headless mode (login always runs with head)
+# Run browser in headless mode (0 = headful with Xvfb)
 HEADLESS = os.getenv("DOLA_HEADLESS", "0") == "1"
 
 # Base public URL for returning static video links
@@ -74,3 +79,8 @@ REFERENCE_IMAGE_MAX_COUNT = int(os.getenv("DOLA_REFERENCE_IMAGE_MAX_COUNT", "30"
 
 # Extended generation window for reference image tasks (seconds)
 REFERENCE_VIDEO_TIMEOUT = int(os.getenv("DOLA_REFERENCE_VIDEO_TIMEOUT", "900"))
+
+# Supabase optional integration
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
+SUPABASE_SERVICE_ROLE_KEY = (os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY", "")).strip()
+SUPABASE_STORAGE_BUCKET = os.getenv("SUPABASE_STORAGE_BUCKET", "videos").strip()

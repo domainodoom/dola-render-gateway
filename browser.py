@@ -1,3 +1,4 @@
+import asyncio
 import os
 import sys
 from pathlib import Path
@@ -15,8 +16,20 @@ LAUNCH_ARGS = [
 ]
 
 
+def clean_profile_locks(profile_dir: Path):
+    """Safely cleans stale Chromium locks when browser previously crashed."""
+    for lock_name in ("SingletonLock", "SingletonSocket", "SingletonCookie"):
+        lock_path = profile_dir / lock_name
+        try:
+            if lock_path.is_symlink() or lock_path.is_file():
+                lock_path.unlink(missing_ok=True)
+                print(f"[browser] Cleaned stale profile lock: {lock_path}", flush=True)
+        except Exception as e:
+            print(f"[browser] Failed to remove {lock_path}: {e}", flush=True)
+
+
 async def launch_account_context(p, account: str, headless: bool = None, use_extension: bool = False):
-    """Launches accounts/<account> profile, returns BrowserContext. Caller must close.
+    """Launches accounts/<account> profile, returns BrowserContext with crash-retry. Caller must close.
 
     p: async_playwright() instance
     headless: None = uses config.HEADLESS
@@ -54,12 +67,23 @@ async def launch_account_context(p, account: str, headless: bool = None, use_ext
     }
     if config.PROXY:
         kwargs["proxy"] = {"server": config.PROXY}
-    print(f"[browser] Launching context for '{account}': headless={launch_headless}, DISPLAY={os.getenv('DISPLAY', 'none')}, profile={profile_dir}", flush=True)
-    try:
-        return await p.chromium.launch_persistent_context(str(profile_dir), **kwargs)
-    except Exception as exc:
-        print(f"[browser] FAILED to launch context for '{account}': {type(exc).__name__}: {exc}", flush=True)
-        raise
+
+    max_attempts = 3
+    last_exc = None
+    for attempt in range(1, max_attempts + 1):
+        clean_profile_locks(profile_dir)
+        print(f"[browser] Launching context for '{account}' (attempt {attempt}/{max_attempts}): headless={launch_headless}, DISPLAY={os.getenv('DISPLAY', 'none')}, profile={profile_dir}", flush=True)
+        try:
+            return await p.chromium.launch_persistent_context(str(profile_dir), **kwargs)
+        except Exception as exc:
+            last_exc = exc
+            print(f"[browser] FAILED to launch context for '{account}' (attempt {attempt}): {type(exc).__name__}: {exc}", flush=True)
+            clean_profile_locks(profile_dir)
+            if attempt < max_attempts:
+                print("[browser] Waiting 3 seconds before retry...", flush=True)
+                await asyncio.sleep(3)
+
+    raise last_exc
 
 
 def cookie_value(cookies: list, name: str) -> str:
