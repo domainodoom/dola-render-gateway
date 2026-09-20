@@ -12,7 +12,5 @@ RUN patchright install chromium
 
 COPY . .
 
-# Expose the port Railway expects
-
-# Start the uvicorn server
-CMD sh -c "uvicorn server:app --host 0.0.0.0 --port ${PORT:-8000}"
+# Railway routes traffic correctly when EXPOSE is omitted, but startCommand in railway.toml will use $PORT
+CMD ["python", "-m", "uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
