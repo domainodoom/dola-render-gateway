@@ -42,12 +42,15 @@ from media import download_reference_images, validate_reference_urls
 from store import PendingTaskLimitExceeded, TaskQuotaExceeded, TaskStore
 
 Path(config.DOWNLOAD_DIR).mkdir(parents=True, exist_ok=True)
+Path(config.ACCOUNTS_DIR).mkdir(parents=True, exist_ok=True)
+Path(config.DB_PATH).parent.mkdir(parents=True, exist_ok=True)
+Path(config.POOL_DB_PATH).parent.mkdir(parents=True, exist_ok=True)
 Path("web").mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="dola-pool", version="0.4.0")
 
 store = TaskStore(config.DB_PATH)
-pool = BrowserPool(max_concurrency=config.MAX_CONCURRENCY)
+pool = BrowserPool(accounts_dir=config.ACCOUNTS_DIR, db_path=config.POOL_DB_PATH, max_concurrency=config.MAX_CONCURRENCY)
 
 app.mount("/videos", StaticFiles(directory=config.DOWNLOAD_DIR), name="videos")
 
@@ -594,7 +597,7 @@ async def _run_headful_login_job(name: str):
         "message": "Đang khởi chạy trình duyệt Chrome...",
         "started_at": time.time(),
     }
-    profile_dir = Path("accounts") / name
+    profile_dir = Path(config.ACCOUNTS_DIR) / name
     profile_dir.mkdir(parents=True, exist_ok=True)
 
     from patchright.async_api import async_playwright

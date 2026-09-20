@@ -21,7 +21,7 @@ async def launch_account_context(p, account: str, headless: bool = None, use_ext
     p: async_playwright() instance
     headless: None = uses config.HEADLESS
     """
-    profile_dir = Path("accounts") / account
+    profile_dir = Path(config.ACCOUNTS_DIR) / account
     if not profile_dir.exists():
         raise FileNotFoundError(
             f"Account profile does not exist: {profile_dir} (run python add_account.py {account} first)"
@@ -54,7 +54,12 @@ async def launch_account_context(p, account: str, headless: bool = None, use_ext
     }
     if config.PROXY:
         kwargs["proxy"] = {"server": config.PROXY}
-    return await p.chromium.launch_persistent_context(str(profile_dir), **kwargs)
+    print(f"[browser] Launching context for '{account}': headless={launch_headless}, DISPLAY={os.getenv('DISPLAY', 'none')}, profile={profile_dir}", flush=True)
+    try:
+        return await p.chromium.launch_persistent_context(str(profile_dir), **kwargs)
+    except Exception as exc:
+        print(f"[browser] FAILED to launch context for '{account}': {type(exc).__name__}: {exc}", flush=True)
+        raise
 
 
 def cookie_value(cookies: list, name: str) -> str:

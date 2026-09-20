@@ -27,7 +27,7 @@ API_KEYS = [k.strip() for k in os.getenv("DOLA_API_KEYS", "").split(",") if k.st
 COOKIES_FILE = os.getenv("DOLA_COOKIES_FILE", "cookies.txt")
 
 # Max concurrent video generation tasks
-MAX_CONCURRENCY = int(os.getenv("DOLA_MAX_CONCURRENCY", "3"))
+MAX_CONCURRENCY = int(os.getenv("DOLA_MAX_CONCURRENCY", "1"))
 
 # Global pending task queue limit (queued + processing), 0 = unlimited
 MAX_PENDING_TASKS = int(os.getenv("DOLA_MAX_PENDING_TASKS", "100"))
@@ -35,8 +35,12 @@ MAX_PENDING_TASKS = int(os.getenv("DOLA_MAX_PENDING_TASKS", "100"))
 # Video generation timeout in seconds
 VIDEO_TIMEOUT = int(os.getenv("DOLA_VIDEO_TIMEOUT", "300"))
 
-# SQLite database path
+# SQLite database paths
 DB_PATH = os.getenv("DOLA_DB_PATH", "tasks.db")
+POOL_DB_PATH = os.getenv("DOLA_POOL_DB_PATH", "pool_usage.db")
+
+# Accounts profile directory
+ACCOUNTS_DIR = os.getenv("DOLA_ACCOUNTS_DIR", "accounts")
 
 # Video download storage directory (served statically by FastAPI)
 DOWNLOAD_DIR = os.getenv("DOLA_DOWNLOAD_DIR", "downloads")

@@ -27,12 +27,16 @@ class AllAccountsQuotaBlockedError(RuntimeError):
 
 
 class BrowserPool:
-    def __init__(self, accounts_dir: str = "accounts", db_path: str = "pool_usage.db",
-                 max_concurrency: int = 1):
-        self.accounts_dir = Path(accounts_dir)
-        self.semaphore = asyncio.Semaphore(max_concurrency)
+    def __init__(self, accounts_dir: str | None = None, db_path: str | None = None,
+                 max_concurrency: int | None = None):
+        self.accounts_dir = Path(accounts_dir or config.ACCOUNTS_DIR)
+        self.accounts_dir.mkdir(parents=True, exist_ok=True)
+        db_file = db_path or config.POOL_DB_PATH
+        Path(db_file).parent.mkdir(parents=True, exist_ok=True)
+        concurrency = max_concurrency if max_concurrency is not None else config.MAX_CONCURRENCY
+        self.semaphore = asyncio.Semaphore(concurrency)
         self._locks: dict[str, asyncio.Lock] = {}
-        self._conn = sqlite3.connect(db_path, check_same_thread=False)
+        self._conn = sqlite3.connect(db_file, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute(
             "CREATE TABLE IF NOT EXISTS usage (account TEXT, day TEXT, used INTEGER, "

@@ -118,7 +118,7 @@ async def import_account_from_data(account_name: str, data: dict | list | str) -
     if not pw_cookies:
         raise ValueError("No valid cookies found in provided data")
 
-    profile_dir = Path("accounts") / account_name
+    profile_dir = Path(config.ACCOUNTS_DIR) / account_name
     profile_dir.mkdir(parents=True, exist_ok=True)
 
     from browser import LAUNCH_ARGS
@@ -141,13 +141,13 @@ async def import_account_from_data(account_name: str, data: dict | list | str) -
 
     # Append to cookies.txt as secondary fallback
     try:
-        with open("cookies.txt", "a", encoding="utf-8") as f:
+        with open(config.COOKIES_FILE, "a", encoding="utf-8") as f:
             f.write("; ".join(cookie_str_parts) + "\n")
     except Exception:
         pass
 
     # Register in BrowserPool SQLite DB
-    pool = BrowserPool()
+    pool = BrowserPool(accounts_dir=config.ACCOUNTS_DIR, db_path=config.POOL_DB_PATH)
     pool._ensure_meta(account_name)
     pool.set_email(account_name, f"imported_{account_name}")
     pool.set_login_status(account_name, True)

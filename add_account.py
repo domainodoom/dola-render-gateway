@@ -217,7 +217,7 @@ async def _find_first_visible(page, selectors: list[str]):
 
 async def add_account_flow(account: str, email: str, password: str, secret: str) -> bool:
     """Full account addition flow; returns True on success."""
-    profile_dir = Path("accounts") / account
+    profile_dir = Path(config.ACCOUNTS_DIR) / account
     profile_dir.mkdir(parents=True, exist_ok=True)
 
     async with async_playwright() as p:
@@ -326,7 +326,7 @@ async def add_account_flow(account: str, email: str, password: str, secret: str)
                     print(f"[{account}] ✓ Login successful, sessionid saved to {profile_dir}", flush=True)
                     c_parts = [f"{c['name']}={c['value']}" for c in cookies if c.get("value")]
                     try:
-                        with open("cookies.txt", "a", encoding="utf-8") as f:
+                        with open(config.COOKIES_FILE, "a", encoding="utf-8") as f:
                             f.write("; ".join(c_parts) + "\n")
                     except Exception:
                         pass

@@ -1,0 +1,26 @@
+[phases.setup]
+aptPkgs = [
+    "xvfb",
+    "xauth",
+    "libgtk-3-0",
+    "libdbus-1-3",
+    "libnss3",
+    "libgbm1",
+    "libasound2",
+    "libx11-xcb1",
+    "libxcomposite1",
+    "libxdamage1",
+    "libxrandr2",
+    "libxkbcommon0",
+    "libpangocairo-1.0-0",
+    "fonts-liberation"
+]
+
+[phases.build]
+cmds = [
+    "python -m pip install -r requirements.txt",
+    "patchright install chromium"
+]
+
+[deploy]
+startCommand = "xvfb-run -a -s '-screen 0 1280x720x24' uvicorn server:app --host 0.0.0.0 --port $PORT --workers 1"
