@@ -390,6 +390,17 @@ async def on_startup():
     asyncio.create_task(_auto_import_cookies_on_startup())
 
 
+@app.on_event("shutdown")
+async def on_shutdown():
+    """Gracefully close Chromium singleton on server exit."""
+    try:
+        from chromium_manager import shutdown as chromium_shutdown
+        await chromium_shutdown()
+        print("[shutdown] Chromium singleton closed.", flush=True)
+    except Exception as e:
+        print(f"[shutdown] Error closing Chromium: {e}", flush=True)
+
+
 @app.post("/v1/videos/generations", response_model=TaskResponse)
 async def create_video(req: VideoGenRequest, authorization: str | None = Header(default=None)):
     client = _auth(authorization)

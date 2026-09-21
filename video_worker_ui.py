@@ -322,16 +322,13 @@ async def poll_conversation(account: str, page, context, conversation_id: str,
 async def resume_video(account: str, conversation_id: str, timeout: int,
                        on_poll=None, on_balance=None) -> dict:
     """Recovers accepted session after server restart without re-sending prompt."""
-    async with async_playwright() as p:
-        context = await launch_account_context(p, account, headless=False if sys.platform == "win32" else None, use_extension=True)
-        try:
-            page = context.pages[0] if context.pages else await context.new_page()
-            await page.goto(f"https://www.dola.com/chat/{conversation_id}",
-                            timeout=60000, wait_until="domcontentloaded")
-            await page.wait_for_timeout(5000)
-            return await poll_conversation(account, page, context, conversation_id, timeout, on_poll, on_balance)
-        finally:
-            await context.close()
+    from chromium_manager import get_context
+    context = await get_context(account)
+    page = context.pages[0] if context.pages else await context.new_page()
+    await page.goto(f"https://www.dola.com/chat/{conversation_id}",
+                    timeout=60000, wait_until="domcontentloaded")
+    await page.wait_for_timeout(5000)
+    return await poll_conversation(account, page, context, conversation_id, timeout, on_poll, on_balance)
 
 
 async def generate_video(account: str, prompt: str, ratio: str = None,
@@ -339,7 +336,7 @@ async def generate_video(account: str, prompt: str, ratio: str = None,
                          model: str = "seedance_v2.0", use_extension: bool = True,
                          on_conversation_id=None, on_poll=None, on_balance=None,
                          reference_image_paths: list[str] | None = None) -> dict:
-    """Full generation flow via UI automation."""
+    """Full generation flow via UI automation using persistent Chromium singleton."""
     timeout = timeout or config.VIDEO_TIMEOUT
     model_key = model.lower().replace("-", "_")
     if model_key in ("seedance_2.5", "seedance_v2.5", "seedance_25", "seedance_v25"):
@@ -357,127 +354,133 @@ async def generate_video(account: str, prompt: str, ratio: str = None,
         timeout = max(timeout, 1800)
     if reference_image_paths:
         timeout = max(timeout, config.REFERENCE_VIDEO_TIMEOUT)
-    async with async_playwright() as p:
-        context = await launch_account_context(
-            p, account, headless=False if use_extension and sys.platform == "win32" else None,
-            use_extension=use_extension)
+
+    # Use persistent Chromium singleton — never open more than 1 Chromium at a time
+    from chromium_manager import get_context, close_current_context
+    context = await get_context(account)
+    try:
+        page = context.pages[0] if context.pages else await context.new_page()
+        await page.goto("https://www.dola.com/chat", timeout=60000, wait_until="domcontentloaded")
+        await page.wait_for_timeout(5000)
+        cookies = await context.cookies("https://www.dola.com")
+        ms_token, fp = cookie_value(cookies, "msToken"), cookie_value(cookies, "s_v_web_id")
+        await _preflight_balance(page, ms_token, fp, config.VIDEO_REQUIRED_POINTS)
+
+        # ---- UI Submission ----
+        await page.click(VIDEO_BTN)
+        await page.wait_for_timeout(1500)
+        if reference_image_paths:
+            await attach_reference_images(page, reference_image_paths)
+        # Select model in UI
         try:
-            page = context.pages[0] if context.pages else await context.new_page()
-            await page.goto("https://www.dola.com/chat", timeout=60000, wait_until="domcontentloaded")
-            await page.wait_for_timeout(5000)
-            cookies = await context.cookies("https://www.dola.com")
-            ms_token, fp = cookie_value(cookies, "msToken"), cookie_value(cookies, "s_v_web_id")
-            await _preflight_balance(page, ms_token, fp, config.VIDEO_REQUIRED_POINTS)
+            current_model = None
+            current_label = ""
+            for label in ("モデル 2.5", "モデル 2.0高速", "モデル 2.0"):
+                loc = page.get_by_text(label, exact=True).first
+                if await loc.count() and await loc.is_visible():
+                    current_model = loc
+                    current_label = label
+                    break
+            if current_model is None:
+                current_model = page.get_by_text(re.compile(r"^モデル "), exact=False).first
 
-            # ---- UI Submission ----
-            await page.click(VIDEO_BTN)
-            await page.wait_for_timeout(1500)
-            if reference_image_paths:
-                await attach_reference_images(page, reference_image_paths)
-            # Select model in UI
-            try:
-                current_model = None
-                current_label = ""
-                for label in ("モデル 2.5", "モデル 2.0高速", "モデル 2.0"):
-                    loc = page.get_by_text(label, exact=True).first
+            need_switch = True
+            if current_label:
+                if model_key == "seedance_v2.5" and "2.5" in current_label:
+                    need_switch = False
+                elif model_key == "seedance_v2.0" and ("2.0" in current_label or "高速" in current_label):
+                    need_switch = False
+
+            if need_switch and current_model:
+                await current_model.click(timeout=5000)
+                await page.wait_for_timeout(500)
+                options = (("Dreamina Seedance 2.5", "Seedance 2.5", "Seedance2.5")
+                           if model_key == "seedance_v2.5"
+                           else ("Dreamina Seedance 2.0高速", "Dreamina Seedance 2.0", "Seedance2.0Fast"))
+                selected = False
+                for option_text in options:
+                    loc = page.get_by_text(option_text, exact=False).first
                     if await loc.count() and await loc.is_visible():
-                        current_model = loc
-                        current_label = label
+                        await loc.click(timeout=5000)
+                        selected = True
                         break
-                if current_model is None:
-                    current_model = page.get_by_text(re.compile(r"^モデル "), exact=False).first
-
-                need_switch = True
-                if current_label:
-                    if model_key == "seedance_v2.5" and "2.5" in current_label:
-                        need_switch = False
-                    elif model_key == "seedance_v2.0" and ("2.0" in current_label or "高速" in current_label):
-                        need_switch = False
-
-                if need_switch and current_model:
-                    await current_model.click(timeout=5000)
-                    await page.wait_for_timeout(500)
-                    options = (("Dreamina Seedance 2.5", "Seedance 2.5", "Seedance2.5")
-                               if model_key == "seedance_v2.5"
-                               else ("Dreamina Seedance 2.0高速", "Dreamina Seedance 2.0", "Seedance2.0Fast"))
-                    selected = False
-                    for option_text in options:
-                        loc = page.get_by_text(option_text, exact=False).first
-                        if await loc.count() and await loc.is_visible():
-                            await loc.click(timeout=5000)
-                            selected = True
-                            break
-                    if not selected:
-                        raise RuntimeError("Model option not found")
-                    await page.wait_for_timeout(500)
+                if not selected:
+                    raise RuntimeError("Model option not found")
+                await page.wait_for_timeout(500)
+        except Exception as e:
+            print(f"  (Failed to set model {model_key}: {str(e)[:120]})", flush=True)
+        if ratio:
+            try:
+                await page.click("text=比率", timeout=3000)
+                await page.wait_for_timeout(500)
+                await page.click(f"text={ratio}", timeout=3000)
             except Exception as e:
-                print(f"  (Failed to set model {model_key}: {str(e)[:120]})", flush=True)
-            if ratio:
-                try:
-                    await page.click("text=比率", timeout=3000)
+                print(f"  (Failed to set ratio, using default: {str(e)[:80]})", flush=True)
+        if duration:
+            try:
+                await page.click(f"text={duration}s", timeout=3000)
+            except Exception:
+                try:  # Open duration dropdown
+                    await page.get_by_text(re.compile(r"^\d+s$")).first.click(timeout=3000)
                     await page.wait_for_timeout(500)
-                    await page.click(f"text={ratio}", timeout=3000)
-                except Exception as e:
-                    print(f"  (Failed to set ratio, using default: {str(e)[:80]})", flush=True)
-            if duration:
-                try:
                     await page.click(f"text={duration}s", timeout=3000)
-                except Exception:
-                    try:  # Open duration dropdown
-                        await page.get_by_text(re.compile(r"^\d+s$")).first.click(timeout=3000)
-                        await page.wait_for_timeout(500)
-                        await page.click(f"text={duration}s", timeout=3000)
-                    except Exception as e:
-                        print(f"  (Failed to set duration, using default: {str(e)[:80]})", flush=True)
-            box = await page.query_selector("textarea") or await page.query_selector('[contenteditable="true"]')
-            await box.click()
-            await page.keyboard.type(prompt, delay=100)
-            await page.wait_for_timeout(600)
-            await page.keyboard.press("Enter")
-            print(f"[{account}] UI submitted prompt: {prompt[:40]}", flush=True)
+                except Exception as e:
+                    print(f"  (Failed to set duration, using default: {str(e)[:80]})", flush=True)
+        box = await page.query_selector("textarea") or await page.query_selector('[contenteditable="true"]')
+        await box.click()
+        await page.keyboard.type(prompt, delay=100)
+        await page.wait_for_timeout(600)
+        await page.keyboard.press("Enter")
+        print(f"[{account}] UI submitted prompt: {prompt[:40]}", flush=True)
 
-            # ---- Captcha Solver (up to 3 attempts) ----
-            solved_or_absent = False
-            for attempt in range(1, 4):
-                frame = None
-                for _ in range(20):
-                    await page.wait_for_timeout(1000)
-                    frame = find_captcha_frame(page)
-                    if frame:
-                        break
-                if not frame:
-                    solved_or_absent = True
-                    break
-                print(f"[{account}] Captcha detected, attempt {attempt} solving...", flush=True)
-                if await solve_slider(page, frame, attempt):
-                    print(f"[{account}] Captcha passed ✓", flush=True)
-                    await page.wait_for_timeout(3000)  # Wait for frontend auto-retry
-                    solved_or_absent = True
-                    break
-                print(f"[{account}] Captcha not passed, retrying...", flush=True)
-            if not solved_or_absent:
-                await page.screenshot(path="solve_fail.png")
-                raise RiskControlError("Captcha failed 3 times")
-
-            # ---- Wait for real conversation_id ----
-            conv_id = ""
-            for _ in range(30):
+        # ---- Captcha Solver (up to 3 attempts) ----
+        solved_or_absent = False
+        for attempt in range(1, 4):
+            frame = None
+            for _ in range(20):
                 await page.wait_for_timeout(1000)
-                tail = page.url.rstrip("/").split("/")[-1]
-                if tail.isdigit():
-                    conv_id = tail
+                frame = find_captcha_frame(page)
+                if frame:
                     break
-            if not conv_id:
-                await page.screenshot(path="no_conv.png")
-                raise TimeoutError("conversation_id not acquired within 30s")
-            print(f"[{account}] conversation_id={conv_id}, polling for video...", flush=True)
+            if not frame:
+                solved_or_absent = True
+                break
+            print(f"[{account}] Captcha detected, attempt {attempt} solving...", flush=True)
+            if await solve_slider(page, frame, attempt):
+                print(f"[{account}] Captcha passed ✓", flush=True)
+                await page.wait_for_timeout(3000)  # Wait for frontend auto-retry
+                solved_or_absent = True
+                break
+            print(f"[{account}] Captcha not passed, retrying...", flush=True)
+        if not solved_or_absent:
+            await page.screenshot(path="solve_fail.png")
+            raise RiskControlError("Captcha failed 3 times")
 
-            deadline = time.time() + timeout
-            if on_conversation_id:
-                on_conversation_id(account, conv_id, deadline)
-            return await poll_conversation(account, page, context, conv_id, timeout, on_poll, on_balance)
-        finally:
-            await context.close()
+        # ---- Wait for real conversation_id ----
+        conv_id = ""
+        for _ in range(30):
+            await page.wait_for_timeout(1000)
+            tail = page.url.rstrip("/").split("/")[-1]
+            if tail.isdigit():
+                conv_id = tail
+                break
+        if not conv_id:
+            await page.screenshot(path="no_conv.png")
+            raise TimeoutError("conversation_id not acquired within 30s")
+        print(f"[{account}] conversation_id={conv_id}, polling for video...", flush=True)
+
+        deadline = time.time() + timeout
+        if on_conversation_id:
+            on_conversation_id(account, conv_id, deadline)
+        return await poll_conversation(account, page, context, conv_id, timeout, on_poll, on_balance)
+    except (CreditInsufficientError, AccountLimitedError, CreditError, RiskControlError):
+        # Account is exhausted or banned — close context so next account gets a fresh browser
+        await close_current_context()
+        raise
+    except Exception:
+        # On unexpected errors, also close context to avoid stale state
+        await close_current_context()
+        raise
 
 
 async def _main():
