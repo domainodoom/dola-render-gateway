@@ -1293,9 +1293,26 @@ async def favicon():
     return Response(status_code=204)
 
 
-# Static assets fallback
-app.mount("/static", StaticFiles(directory="web"), name="web_static")
-app.mount("/", StaticFiles(directory="web", html=True), name="web")
+# Static assets fallback — only mount if web/index.html exists
+# (avoids RuntimeError crash when web/ is empty on fresh Railway deploy)
+_web_dir = Path("web")
+_web_dir.mkdir(parents=True, exist_ok=True)
+
+if (_web_dir / "index.html").exists():
+    app.mount("/static", StaticFiles(directory="web"), name="web_static")
+    app.mount("/", StaticFiles(directory="web", html=True), name="web")
+    print("[server] Admin web UI mounted at /", flush=True)
+else:
+    print("[server] web/index.html not found — skipping static file mount. API-only mode.", flush=True)
+
+    @app.get("/", include_in_schema=False)
+    async def root_fallback():
+        return {
+            "service": "Dola Render Gateway",
+            "status": "ok",
+            "note": "Admin UI not deployed. Use /health for status.",
+            "endpoints": ["/health", "/v1/videos/generations", "/api/admin/accounts"]
+        }
 
 
 if __name__ == "__main__":
