@@ -4,24 +4,16 @@ WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1 \
     DEBIAN_FRONTEND=noninteractive \
-    PORT=8080 \
-    DISPLAY=:99
+    PORT=8080
 
-# Install system dependencies:
-# - tini: PID 1 process manager (handles signals correctly)
-# - xvfb, xauth, x11-utils: Virtual X11 display (required for Chromium with extensions)
-# - xdpyinfo: used by entrypoint.sh to poll Xvfb readiness
-# - ffmpeg: video processing
-# - ntpdate: NTP clock sync (fixes JWT issued-at-future errors)
-# - fonts, ca-certificates, curl: utilities
-# - All Chromium shared library dependencies
+# System dependencies for Chromium + Xvfb
+# NOTE: ntpdate replaced by ntpsec-ntpdate on Debian Trixie
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tini \
     curl \
     ca-certificates \
     xvfb \
     xauth \
-    x11-utils \
     ffmpeg \
     ntpsec-ntpdate \
     fonts-liberation \
