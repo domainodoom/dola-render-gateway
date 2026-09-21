@@ -23,7 +23,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xauth \
     x11-utils \
     ffmpeg \
-    ntpdate \
+    ntpsec-ntpdate \
     fonts-liberation \
     fonts-noto-color-emoji \
     libglib2.0-0 \
