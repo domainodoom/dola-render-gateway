@@ -21,6 +21,9 @@ LAUNCH_ARGS = [
     "--disable-component-update",
     "--disable-domain-reliability",
     "--disable-sync",
+    # Extra stability flags for containerized environments
+    "--disable-features=TranslateUI,BlinkGenPropertyTrees",
+    "--single-process",
 ]
 
 
@@ -40,27 +43,72 @@ def clean_profile_locks(profile_dir: Path):
             print(f"[browser] Failed to remove {lock_path}: {e}", flush=True)
 
 
+def _should_use_headless(use_extension: bool) -> bool:
+    """
+    Determines whether to use headless mode.
+    
+    Rules:
+    - Windows: use config.HEADLESS (default True in local dev)
+    - Linux without DISPLAY: always headless=new (extension won't work, fallback to non-extension path)
+    - Linux with DISPLAY (Xvfb): use headful if extension is needed, headless otherwise
+    
+    Note: Chromium extensions CANNOT run in headless=new mode.
+    If an extension is required but DISPLAY is missing, we'll run without extension.
+    """
+    if sys.platform == "win32":
+        return config.HEADLESS
+
+    # On Linux/Railway/Docker
+    display = os.getenv("DISPLAY", "").strip()
+    if display:
+        # Xvfb is available
+        if use_extension:
+            # Extensions need headful mode + Xvfb
+            print(f"[browser] DISPLAY={display} found. Running HEADFUL for extension support.", flush=True)
+            return False
+        else:
+            # No extension needed, can use headless
+            return True
+    else:
+        # No display server - must use headless=new
+        if use_extension:
+            print(
+                "[browser] WARNING: DISPLAY not set. Chromium extensions CANNOT run in headless=new mode. "
+                "Extension will be DISABLED for this launch. Set up Xvfb if extension is required.",
+                flush=True,
+            )
+        return True
+
+
 async def launch_account_context(p, account: str, headless: bool = None, use_extension: bool = False):
     """Launches accounts/<account> profile, returns BrowserContext with crash-retry. Caller must close.
 
     p: async_playwright() instance
-    headless: None = uses config.HEADLESS
+    headless: None = auto-detect based on platform and DISPLAY
+    use_extension: True = load Dola extension (requires headful + Xvfb on Linux)
     """
     profile_dir = Path(config.ACCOUNTS_DIR) / account
     if not profile_dir.exists():
         raise FileNotFoundError(
             f"Account profile does not exist: {profile_dir} (run python add_account.py {account} first)"
         )
+
+    # Determine headless mode
+    if headless is None:
+        launch_headless = _should_use_headless(use_extension)
+    else:
+        launch_headless = headless
+
     args = list(LAUNCH_ARGS)
-    # On Linux / Railway / Docker, always use modern headless=new mode
-    if sys.platform != "win32":
-        launch_headless = True
+
+    # If headless, add the modern headless flag
+    if launch_headless:
         if "--headless=new" not in args:
             args.append("--headless=new")
-    else:
-        launch_headless = config.HEADLESS if headless is None else headless
-
-    if use_extension:
+    
+    # Extension setup (only if headful, since extensions don't work in headless)
+    effective_extension = use_extension and not launch_headless
+    if effective_extension:
         if not config.EXTENSION_ENABLED:
             raise RuntimeError("Dola extension is disabled (DOLA_EXTENSION_ENABLED=0)")
         extension_dir = Path(config.EXTENSION_DIR).resolve()
@@ -70,6 +118,8 @@ async def launch_account_context(p, account: str, headless: bool = None, use_ext
             f"--disable-extensions-except={extension_dir}",
             f"--load-extension={extension_dir}",
         ])
+        print(f"[browser] Extension loaded: {extension_dir}", flush=True)
+
     kwargs = {
         "headless": launch_headless,
         "args": args,
@@ -84,30 +134,45 @@ async def launch_account_context(p, account: str, headless: bool = None, use_ext
     last_exc = None
     for attempt in range(1, max_attempts + 1):
         clean_profile_locks(profile_dir)
-        current_headless = launch_headless
-        current_args = list(args)
-        # Fallback to --headless=new if X11/Xvfb fails or closes immediately on Linux
-        if attempt > 1 and sys.platform != "win32" and not current_headless:
-            print(f"[browser] Retrying '{account}' in --headless=new mode to bypass display crash...", flush=True)
-            current_headless = True
-            if "--headless=new" not in current_args:
-                current_args.append("--headless=new")
 
         attempt_kwargs = dict(kwargs)
-        attempt_kwargs["headless"] = current_headless
-        attempt_kwargs["args"] = current_args
-        attempt_kwargs["chromium_sandbox"] = False
+        attempt_kwargs["args"] = list(args)
 
-        print(f"[browser] Launching context for '{account}' (attempt {attempt}/{max_attempts}): headless={current_headless}, DISPLAY={os.getenv('DISPLAY', 'none')}, profile={profile_dir}", flush=True)
+        # On retry in Linux, if headful failed, force headless
+        if attempt > 1 and sys.platform != "win32" and not launch_headless:
+            print(
+                f"[browser] Retrying '{account}' (attempt {attempt}) - forcing --headless=new to bypass display crash...",
+                flush=True,
+            )
+            attempt_kwargs["headless"] = True
+            headless_args = [a for a in attempt_kwargs["args"] if not a.startswith("--disable-extensions-except") and not a.startswith("--load-extension")]
+            if "--headless=new" not in headless_args:
+                headless_args.append("--headless=new")
+            attempt_kwargs["args"] = headless_args
+
+        print(
+            f"[browser] Launching context for '{account}' "
+            f"(attempt {attempt}/{max_attempts}): "
+            f"headless={attempt_kwargs['headless']}, "
+            f"DISPLAY={os.getenv('DISPLAY', 'NOT_SET')}, "
+            f"extension={effective_extension and attempt == 1}, "
+            f"profile={profile_dir}",
+            flush=True,
+        )
         try:
             return await p.chromium.launch_persistent_context(str(profile_dir), **attempt_kwargs)
         except Exception as exc:
             last_exc = exc
-            print(f"[browser] FAILED to launch context for '{account}' (attempt {attempt}): {type(exc).__name__}: {exc}", flush=True)
+            print(
+                f"[browser] FAILED to launch context for '{account}' "
+                f"(attempt {attempt}/{max_attempts}): {type(exc).__name__}: {exc}",
+                flush=True,
+            )
             clean_profile_locks(profile_dir)
             if attempt < max_attempts:
-                print("[browser] Waiting 3 seconds before retry...", flush=True)
-                await asyncio.sleep(3)
+                wait = 3 * attempt  # progressive backoff: 3s, 6s
+                print(f"[browser] Waiting {wait}s before retry...", flush=True)
+                await asyncio.sleep(wait)
 
     raise BrowserLaunchError(
         f"Failed to launch Chromium context for '{account}' after {max_attempts} attempts: {last_exc}"
@@ -123,7 +188,7 @@ async def check_login_state(account: str) -> bool:
     """Opens Dola in headless mode and checks whether session is active."""
     from patchright.async_api import async_playwright
     async with async_playwright() as p:
-        context = await launch_account_context(p, account)
+        context = await launch_account_context(p, account, headless=True, use_extension=False)
         try:
             page = context.pages[0] if context.pages else await context.new_page()
             await page.goto("https://www.dola.com/chat", timeout=60000, wait_until="domcontentloaded")

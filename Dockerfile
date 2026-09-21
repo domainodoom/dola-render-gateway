@@ -4,16 +4,26 @@ WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1 \
     DEBIAN_FRONTEND=noninteractive \
-    PORT=8080
+    PORT=8080 \
+    DISPLAY=:99
 
-# Install tini, xvfb, xauth, ffmpeg, fonts, curl, ca-certificates, and all Chromium dependencies
+# Install system dependencies:
+# - tini: PID 1 process manager (handles signals correctly)
+# - xvfb, xauth, x11-utils: Virtual X11 display (required for Chromium with extensions)
+# - xdpyinfo: used by entrypoint.sh to poll Xvfb readiness
+# - ffmpeg: video processing
+# - ntpdate: NTP clock sync (fixes JWT issued-at-future errors)
+# - fonts, ca-certificates, curl: utilities
+# - All Chromium shared library dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tini \
     curl \
     ca-certificates \
     xvfb \
     xauth \
+    x11-utils \
     ffmpeg \
+    ntpdate \
     fonts-liberation \
     fonts-noto-color-emoji \
     libglib2.0-0 \
@@ -43,7 +53,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Install Chromium
+# Install Chromium browser for patchright
 RUN patchright install chromium
 
 COPY . .
