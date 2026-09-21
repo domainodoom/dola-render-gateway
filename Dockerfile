@@ -56,5 +56,4 @@ RUN mkdir -p /data/accounts /data/downloads accounts downloads && \
 
 EXPOSE 8080
 
-ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["/app/entrypoint.sh"]
+CMD ["/bin/sh", "/app/entrypoint.sh"]
