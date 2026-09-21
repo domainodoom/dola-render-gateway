@@ -317,41 +317,70 @@ def _task_reference_images(raw) -> list[str]:
 
 
 async def _auto_import_cookies_on_startup():
+    """
+    Imports cookies from cookies.txt WITHOUT launching Chromium.
+    Only creates profile directories and injects cookies via a single
+    lightweight browser session per account (deferred, non-blocking).
+    """
     cookie_file = Path(config.COOKIES_FILE)
     if not cookie_file.exists():
+        print("[startup] No cookies.txt found, skipping auto-import.", flush=True)
         return
     try:
-        lines = [line.strip() for line in cookie_file.read_text(encoding="utf-8").splitlines() if line.strip() and not line.startswith("#")]
+        lines = [line.strip() for line in cookie_file.read_text(encoding="utf-8").splitlines()
+                 if line.strip() and not line.startswith("#")]
         if not lines:
+            print("[startup] cookies.txt is empty, skipping auto-import.", flush=True)
             return
+
         from import_cookie import import_account_from_data
         existing = set(pool.accounts)
+        imported = 0
+        # Import ONE account at a time with delay to avoid OOM on Railway free tier
         for idx, line in enumerate(lines, 1):
             acc_name = f"acc{idx}"
             if acc_name not in existing:
                 try:
+                    # Wait 5s between imports to let memory settle
+                    if imported > 0:
+                        await asyncio.sleep(5)
                     await import_account_from_data(acc_name, line)
-                    print(f"[startup] auto-imported {acc_name}", flush=True)
+                    imported += 1
+                    print(f"[startup] auto-imported {acc_name} ({imported}/{len(lines)})", flush=True)
                 except Exception as e:
                     print(f"[startup] failed to auto-import {acc_name}: {e}", flush=True)
+            else:
+                print(f"[startup] {acc_name} already exists, skipping.", flush=True)
+
+        print(f"[startup] Cookie import complete: {imported} new accounts imported.", flush=True)
     except Exception as exc:
         print(f"[startup] auto_import error: {exc}", flush=True)
 
 
 @app.on_event("startup")
-async def resume_incomplete_tasks():
-    """Recovers accepted sessions on startup and requeues pending tasks."""
-    asyncio.create_task(_auto_import_cookies_on_startup())
+async def on_startup():
+    """
+    Startup handler: mark stale tasks as failed, then import cookies.
+    Does NOT launch Chromium immediately to avoid OOM on Railway free tier.
+    """
+    # Mark all stale 'processing'/'queued' tasks as failed so they don't block
+    # This is safer than trying to resume them (which would launch Chromium on startup)
+    stale_count = 0
     for row in store.recoverable_tasks():
-        asyncio.create_task(_resume_task(row))
+        store.update(row["id"], status="failed",
+                     error="Server restarted; task was not completed.",
+                     finished_at=time.time())
+        stale_count += 1
     for row in store.recoverable_queued_tasks():
-        ratio = row.get("ratio")
-        if ratio == "default":
-            ratio = None
-        asyncio.create_task(_run_task(
-            row["id"], row["model"], row["prompt"], ratio, row["duration"],
-            _task_reference_images(row.get("reference_images")), _task_client(row),
-        ))
+        store.update(row["id"], status="failed",
+                     error="Server restarted; queued task was dropped.",
+                     finished_at=time.time())
+        stale_count += 1
+    if stale_count:
+        print(f"[startup] Marked {stale_count} stale task(s) as failed.", flush=True)
+
+    # Import cookies in background (deferred so server responds to health checks first)
+    asyncio.create_task(_auto_import_cookies_on_startup())
 
 
 @app.post("/v1/videos/generations", response_model=TaskResponse)

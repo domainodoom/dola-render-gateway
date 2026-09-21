@@ -122,23 +122,34 @@ async def import_account_from_data(account_name: str, data: dict | list | str) -
     profile_dir.mkdir(parents=True, exist_ok=True)
 
     from browser import LAUNCH_ARGS
+    import sys
+
+    # Always use headless for import (no extension needed, no DISPLAY required)
+    headless_args = [a for a in LAUNCH_ARGS if "extension" not in a.lower()]
+    if "--headless=new" not in headless_args:
+        headless_args.append("--headless=new")
 
     async with async_playwright() as p:
         kwargs = {
             "headless": True,
-            "args": LAUNCH_ARGS,
+            "args": headless_args,
             "chromium_sandbox": False,
             "locale": "ja-JP",
             "timezone_id": "Asia/Tokyo",
         }
         if config.PROXY:
             kwargs["proxy"] = {"server": config.PROXY}
-        context = await p.chromium.launch_persistent_context(
-            str(profile_dir),
-            **kwargs,
-        )
-        await context.add_cookies(pw_cookies)
-        await context.close()
+
+        async def _do_import():
+            ctx = await p.chromium.launch_persistent_context(str(profile_dir), **kwargs)
+            await ctx.add_cookies(pw_cookies)
+            await ctx.close()
+
+        # Timeout after 60s to prevent hanging on Railway
+        try:
+            await asyncio.wait_for(_do_import(), timeout=60.0)
+        except asyncio.TimeoutError:
+            raise RuntimeError(f"Chromium launch timed out after 60s for account '{account_name}'")
 
     # Append to cookies.txt as secondary fallback
     try:
