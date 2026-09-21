@@ -10,9 +10,17 @@ LAUNCH_ARGS = [
     "--disable-setuid-sandbox",
     "--disable-dev-shm-usage",
     "--disable-gpu",
+    "--disable-software-rasterizer",
     "--disable-blink-features=AutomationControlled",
     "--no-first-run",
     "--no-default-browser-check",
+    "--disable-background-networking",
+    "--disable-background-timer-throttling",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-breakpad",
+    "--disable-component-update",
+    "--disable-domain-reliability",
+    "--disable-sync",
 ]
 
 
@@ -22,10 +30,10 @@ class BrowserLaunchError(Exception):
 
 def clean_profile_locks(profile_dir: Path):
     """Safely cleans stale Chromium locks when browser previously crashed."""
-    for lock_name in ("SingletonLock", "SingletonSocket", "SingletonCookie"):
+    for lock_name in ("SingletonLock", "SingletonSocket", "SingletonCookie", "lockfile"):
         lock_path = profile_dir / lock_name
         try:
-            if lock_path.is_symlink() or lock_path.is_file():
+            if lock_path.is_symlink() or lock_path.exists():
                 lock_path.unlink(missing_ok=True)
                 print(f"[browser] Cleaned stale profile lock: {lock_path}", flush=True)
         except Exception as e:
@@ -66,6 +74,7 @@ async def launch_account_context(p, account: str, headless: bool = None, use_ext
     kwargs = {
         "headless": launch_headless,
         "args": args,
+        "chromium_sandbox": False,
         "locale": "ja-JP",
         "timezone_id": "Asia/Tokyo",
     }
@@ -76,9 +85,23 @@ async def launch_account_context(p, account: str, headless: bool = None, use_ext
     last_exc = None
     for attempt in range(1, max_attempts + 1):
         clean_profile_locks(profile_dir)
-        print(f"[browser] Launching context for '{account}' (attempt {attempt}/{max_attempts}): headless={launch_headless}, DISPLAY={os.getenv('DISPLAY', 'none')}, profile={profile_dir}", flush=True)
+        current_headless = launch_headless
+        current_args = list(args)
+        # Fallback to --headless=new if X11/Xvfb fails or closes immediately on Linux
+        if attempt > 1 and sys.platform != "win32" and not current_headless:
+            print(f"[browser] Retrying '{account}' in --headless=new mode to bypass display crash...", flush=True)
+            current_headless = True
+            if "--headless=new" not in current_args:
+                current_args.append("--headless=new")
+
+        attempt_kwargs = dict(kwargs)
+        attempt_kwargs["headless"] = current_headless
+        attempt_kwargs["args"] = current_args
+        attempt_kwargs["chromium_sandbox"] = False
+
+        print(f"[browser] Launching context for '{account}' (attempt {attempt}/{max_attempts}): headless={current_headless}, DISPLAY={os.getenv('DISPLAY', 'none')}, profile={profile_dir}", flush=True)
         try:
-            return await p.chromium.launch_persistent_context(str(profile_dir), **kwargs)
+            return await p.chromium.launch_persistent_context(str(profile_dir), **attempt_kwargs)
         except Exception as exc:
             last_exc = exc
             print(f"[browser] FAILED to launch context for '{account}' (attempt {attempt}): {type(exc).__name__}: {exc}", flush=True)

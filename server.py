@@ -653,6 +653,7 @@ async def _run_headful_login_job(name: str):
             kwargs = {
                 "headless": False,
                 "args": LAUNCH_ARGS,
+                "chromium_sandbox": False,
                 "locale": "ja-JP",
                 "timezone_id": "Asia/Tokyo",
             }
@@ -1237,7 +1238,7 @@ async def debug_browser():
         
         try:
             async with async_playwright() as p:
-                b = await p.chromium.launch(headless=True, args=LAUNCH_ARGS)
+                b = await p.chromium.launch(headless=True, args=LAUNCH_ARGS, chromium_sandbox=False)
                 page = await b.new_page()
                 await page.goto("https://www.google.com", timeout=15000)
                 title = await page.title()

@@ -127,6 +127,7 @@ async def import_account_from_data(account_name: str, data: dict | list | str) -
         kwargs = {
             "headless": True,
             "args": LAUNCH_ARGS,
+            "chromium_sandbox": False,
             "locale": "ja-JP",
             "timezone_id": "Asia/Tokyo",
         }

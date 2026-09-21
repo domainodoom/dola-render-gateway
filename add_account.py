@@ -222,6 +222,7 @@ async def add_account_flow(account: str, email: str, password: str, secret: str)
 
     async with async_playwright() as p:
         kwargs = {"headless": False, "args": LAUNCH_ARGS,
+                  "chromium_sandbox": False,
                   "locale": "ja-JP", "timezone_id": "Asia/Tokyo"}
         if config.PROXY:
             kwargs["proxy"] = {"server": config.PROXY}
