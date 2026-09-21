@@ -318,9 +318,10 @@ def _task_reference_images(raw) -> list[str]:
 
 async def _auto_import_cookies_on_startup():
     """
-    Imports cookies from cookies.txt WITHOUT launching Chromium.
-    Only creates profile directories and injects cookies via a single
-    lightweight browser session per account (deferred, non-blocking).
+    Imports cookies from cookies.txt SEQUENTIALLY (rolling) - one Chromium at a time.
+    Waits 10 seconds between each account import to let Chromium fully exit
+    and release memory before the next one starts.
+    This prevents OOM on Railway free tier (512MB RAM limit).
     """
     cookie_file = Path(config.COOKIES_FILE)
     if not cookie_file.exists():
@@ -336,23 +337,29 @@ async def _auto_import_cookies_on_startup():
         from import_cookie import import_account_from_data
         existing = set(pool.accounts)
         imported = 0
-        # Import ONE account at a time with delay to avoid OOM on Railway free tier
+        total = len(lines)
+        print(f"[startup] Found {total} account(s) in cookies.txt, importing sequentially...", flush=True)
+
+        # ROLLING IMPORT: strict one-at-a-time, NEVER concurrent
         for idx, line in enumerate(lines, 1):
             acc_name = f"acc{idx}"
-            if acc_name not in existing:
-                try:
-                    # Wait 5s between imports to let memory settle
-                    if imported > 0:
-                        await asyncio.sleep(5)
-                    await import_account_from_data(acc_name, line)
-                    imported += 1
-                    print(f"[startup] auto-imported {acc_name} ({imported}/{len(lines)})", flush=True)
-                except Exception as e:
-                    print(f"[startup] failed to auto-import {acc_name}: {e}", flush=True)
-            else:
-                print(f"[startup] {acc_name} already exists, skipping.", flush=True)
+            if acc_name in existing:
+                print(f"[startup] [{idx}/{total}] {acc_name} already exists, skipping.", flush=True)
+                continue
+            try:
+                # Wait BEFORE each import (except the very first) so the previous
+                # Chromium process has time to fully exit and free RAM
+                if imported > 0:
+                    print(f"[startup] Waiting 10s before next import...", flush=True)
+                    await asyncio.sleep(10)
+                print(f"[startup] [{idx}/{total}] Importing {acc_name}...", flush=True)
+                await import_account_from_data(acc_name, line)
+                imported += 1
+                print(f"[startup] [{idx}/{total}] {acc_name} imported OK", flush=True)
+            except Exception as e:
+                print(f"[startup] [{idx}/{total}] Failed to import {acc_name}: {e}", flush=True)
 
-        print(f"[startup] Cookie import complete: {imported} new accounts imported.", flush=True)
+        print(f"[startup] Cookie import complete: {imported}/{total} imported.", flush=True)
     except Exception as exc:
         print(f"[startup] auto_import error: {exc}", flush=True)
 
