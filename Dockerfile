@@ -56,4 +56,4 @@ RUN mkdir -p /data/accounts /data/downloads accounts downloads && \
 
 EXPOSE 8080
 
-CMD ["/bin/sh", "/app/entrypoint.sh"]
+CMD uvicorn server:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1
