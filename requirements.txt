@@ -1,4 +1,5 @@
-opencv-python-headless  
+opencv-python-headless
+numpy
 fastapi
 uvicorn[standard]
 aiohttp

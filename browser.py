@@ -23,7 +23,6 @@ LAUNCH_ARGS = [
     "--disable-sync",
     # Extra stability flags for containerized environments
     "--disable-features=TranslateUI,BlinkGenPropertyTrees",
-    "--single-process",
 ]
 
 

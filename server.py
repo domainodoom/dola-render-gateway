@@ -43,16 +43,23 @@ from media import download_reference_images, validate_reference_urls
 from store import PendingTaskLimitExceeded, TaskQuotaExceeded, TaskStore
 from supabase_client import supabase_mgr
 
-Path(config.DOWNLOAD_DIR).mkdir(parents=True, exist_ok=True)
-Path(config.ACCOUNTS_DIR).mkdir(parents=True, exist_ok=True)
-Path(config.DB_PATH).parent.mkdir(parents=True, exist_ok=True)
-Path(config.POOL_DB_PATH).parent.mkdir(parents=True, exist_ok=True)
-Path("web").mkdir(parents=True, exist_ok=True)
+# Ensure all required directories exist BEFORE FastAPI mounts them
+# This prevents crash at startup if Railway Volume is freshly mounted
+for _dir in [
+    config.DOWNLOAD_DIR,
+    config.ACCOUNTS_DIR,
+    str(Path(config.DB_PATH).parent),
+    str(Path(config.POOL_DB_PATH).parent),
+    "web",
+]:
+    Path(_dir).mkdir(parents=True, exist_ok=True)
+print(f"[server] Directories ready. ACCOUNTS={config.ACCOUNTS_DIR} DOWNLOADS={config.DOWNLOAD_DIR}", flush=True)
 
 app = FastAPI(title="dola-pool", version="0.4.0")
 
 store = TaskStore(config.DB_PATH)
 pool = BrowserPool(accounts_dir=config.ACCOUNTS_DIR, db_path=config.POOL_DB_PATH, max_concurrency=config.MAX_CONCURRENCY)
+print(f"[server] Pool ready. Accounts found: {len(pool.accounts)}", flush=True)
 
 app.mount("/videos", StaticFiles(directory=config.DOWNLOAD_DIR), name="videos")
 

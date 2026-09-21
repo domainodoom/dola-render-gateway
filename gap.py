@@ -3,12 +3,22 @@
 Extracts the alpha outline of the puzzle piece and matches it against the Canny
 edge map of the background to locate the notch's x-coordinate.
 """
-import cv2
-import numpy as np
+try:
+    import cv2
+    import numpy as np
+    _CV2_AVAILABLE = True
+except ImportError:
+    _CV2_AVAILABLE = False
 
 
 def find_gap_x(bg_bytes: bytes, piece_bytes: bytes) -> tuple:
     """Returns (gap_x, confidence). gap_x is the left edge of the notch in natural background pixels."""
+    if not _CV2_AVAILABLE:
+        raise RuntimeError(
+            "OpenCV (cv2) is not installed. Cannot solve slider captcha. "
+            "Install with: pip install opencv-python-headless"
+        )
+
     bg = cv2.imdecode(np.frombuffer(bg_bytes, np.uint8), cv2.IMREAD_COLOR)
     piece = cv2.imdecode(np.frombuffer(piece_bytes, np.uint8), cv2.IMREAD_UNCHANGED)
     if piece is None or bg is None:
