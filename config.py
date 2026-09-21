@@ -53,8 +53,8 @@ DOWNLOAD_DIR = os.getenv("DOLA_DOWNLOAD_DIR", str(_BASE_DATA / "downloads" if _H
 # Explicit browser proxy (must point to JP/KR egress; empty = system proxy / direct)
 PROXY = os.getenv("DOLA_PROXY", "").strip()
 
-# Run browser in headless mode (0 = headful with Xvfb)
-HEADLESS = os.getenv("DOLA_HEADLESS", "0") == "1"
+# Run browser in headless mode (1 = headless=new, 0 = headful)
+HEADLESS = os.getenv("DOLA_HEADLESS", "1") == "1"
 
 # Base public URL for returning static video links
 PUBLIC_BASE = os.getenv("DOLA_PUBLIC_BASE", "https://dola-render-gateway-production.up.railway.app")

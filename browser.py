@@ -51,22 +51,21 @@ async def launch_account_context(p, account: str, headless: bool = None, use_ext
         raise FileNotFoundError(
             f"Account profile does not exist: {profile_dir} (run python add_account.py {account} first)"
         )
-    launch_headless = config.HEADLESS if headless is None else headless
     args = list(LAUNCH_ARGS)
+    # On Linux / Railway / Docker, always use modern headless=new mode
+    if sys.platform != "win32":
+        launch_headless = True
+        if "--headless=new" not in args:
+            args.append("--headless=new")
+    else:
+        launch_headless = config.HEADLESS if headless is None else headless
+
     if use_extension:
         if not config.EXTENSION_ENABLED:
             raise RuntimeError("Dola extension is disabled (DOLA_EXTENSION_ENABLED=0)")
         extension_dir = Path(config.EXTENSION_DIR).resolve()
         if not extension_dir.exists():
             raise FileNotFoundError(f"Dola extension directory does not exist: {extension_dir}")
-        # Chromium debugger extension: On headless Linux server without display, keep headless and use --headless=new
-        if sys.platform != "win32" and not os.getenv("DISPLAY"):
-            launch_headless = True
-            if "--headless=new" not in args:
-                args.append("--headless=new")
-        else:
-            launch_headless = False
-
         args.extend([
             f"--disable-extensions-except={extension_dir}",
             f"--load-extension={extension_dir}",
